@@ -48,7 +48,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { DBContext } from "@/contextproviders/DashboardContext";
 
-// ✅ Helper to format state names
+
 const formatStateName = (state) => {
   if (!state) return '';
   return state
@@ -61,7 +61,7 @@ export function GeoSnapshotTable() {
   const { rawData } = DBContext();
   const navigate = useNavigate();
 
-  // ✅ Merge sales and calls data
+
   const generatedData = useMemo(() => {
     if (!rawData?.salesByState && !rawData?.callsByState) {
       return [];

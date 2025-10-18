@@ -9,8 +9,6 @@ const DashboardContext = createContext(null);
 const getStartingRange = () => {
   const from = new Date();
   const to = new Date();
-  const first = from.getDate() - from.getDay();
-  from.setDate(first);
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
   return { from, to };
@@ -19,22 +17,24 @@ const getStartingRange = () => {
 export function DBAuthProvider({ children }) {
   const { configData } = useConfig();
   const dashboardApi = useApi();
-  
+  const vendorApi = useApi();
+
   const [primaryDateRange, setPrimaryDateRange] = useState(getStartingRange());
   const [secondaryDateRange, setSecondaryDateRange] = useState(getStartingRange());
-  const [timeFrame, setTimeFrame] = useState("Daily");
+  const [timeFrame, setTimeFrame] = useState("Hourly");
   const [rawData, setRawData] = useState({
     callrecords: [],
     primarysalerecords: [],
     secondarysalerecords: []
   });
+  const [vendorData, setVendorData] = useState([]); //for now, just to tie the two together on updates
   const [filteredData, setFilteredData] = useState(null)
-  const [lineOfBusiness, setLineOfBusiness] = useState({name:"Medicare Advantage", value:"ma"});
-  
+  const [lineOfBusiness, setLineOfBusiness] = useState({ name: "Medicare Advantage", value: "ma" });
+
   const lineOfBusinessMap = [
-    {name:"All", value:"All"},
-    {name:"Medicare Advantage", value:"MedAdv"},
-    {name:"Final Expense", value:"FE"}
+    { name: "All", value: "All" },
+    { name: "Medicare Advantage", value: "MedAdv" },
+    { name: "Final Expense", value: "FE" }
   ];
   const timeFrameArray = ["Hourly", "Daily", "Day Of Week", "Weekly", "Monthly"];
 
@@ -47,12 +47,19 @@ export function DBAuthProvider({ children }) {
         setTimeFrame("Hourly");
       }
 
-      const result = await dashboardApi.execute('/dashboard/data', 'POST', {
-        primaryDateRange,
-        secondaryDateRange,
-        lineOfBusiness: lineOfBusiness.value,
-      });
-
+      // Run both API requests in parallel
+      const [result, vendorResult] = await Promise.all([
+        dashboardApi.execute('/dashboard/data', 'POST', {
+          primaryDateRange,
+          secondaryDateRange,
+          lineOfBusiness: lineOfBusiness.value,
+        }),
+        vendorApi.execute('/report/generate/vendor', 'POST', {
+          selectedVendor: 'All',
+          startDate: primaryDateRange?.from,
+          endDate: primaryDateRange?.to
+        })
+      ]);
 
       if (result) {
         setRawData(result);
@@ -61,12 +68,19 @@ export function DBAuthProvider({ children }) {
           description: result.error || 'Please try again.'
         });
       }
+
+      if (vendorResult) {
+        setVendorData(vendorResult.data || vendorResult);
+      } else {
+        toast.error('Failed To Load Vendor Breakdown Table', {
+          description: vendorResult.error || 'Please try again.'
+        });
+      }
     };
 
     fetchDashboardData();
   }, [primaryDateRange, secondaryDateRange, lineOfBusiness, configData]);
 
-  // ✅ Use useMemo instead of useCallback - memoize the RESULT, not the function
   useEffect(() => {
     console.log("raw data ", rawData)
     let returnObj = {
@@ -83,11 +97,11 @@ export function DBAuthProvider({ children }) {
     const fromDate = primaryDateRange.from instanceof Date
       ? primaryDateRange.from
       : new Date(primaryDateRange.from);
-    
+
     const toDate = primaryDateRange.to instanceof Date
       ? primaryDateRange.to
       : new Date(primaryDateRange.to);
-    
+
     fromDate.setHours(0, 0, 0, 0);
     toDate.setHours(23, 59, 59, 999);
 
@@ -123,46 +137,61 @@ export function DBAuthProvider({ children }) {
 
     setFilteredData(returnObj)
 
-  }, [rawData]); 
+  }, [rawData]);
 
   const fetchData = useCallback(async () => {
     if (dashboardApi.loading) return false;
 
-      if (primaryDateRange?.from === primaryDateRange?.to) {
-        setTimeFrame("Hourly");
-      }
+    if (primaryDateRange?.from === primaryDateRange?.to) {
+      setTimeFrame("Hourly");
+    }
 
-      const result = await dashboardApi.execute('/dashboard/data', 'POST', {
+    const [result, vendorResult] = await Promise.all([
+      dashboardApi.execute('/dashboard/data', 'POST', {
         primaryDateRange,
         secondaryDateRange,
         lineOfBusiness: lineOfBusiness.value,
-      });
+      }),
+      vendorApi.execute('/report/generate/vendor', 'POST', {
+        selectedVendor: 'All',
+        startDate: primaryDateRange?.from,
+        endDate: primaryDateRange?.to
+      })
+    ]);
 
-      if (result) {
-        setRawData(result);
-        toast.success('Data Refreshed');
-      } else {
-        toast.error('Failed To Load Dashboard Data', {
-          description: result.error || 'Please try again.'
-        });
-      }
+    if (result) {
+      setRawData(result);
+    } else {
+      toast.error('Failed To Load Dashboard Data', {
+        description: result.error || 'Please try again.'
+      });
+    }
+
+    if (vendorResult) {
+      setVendorData(vendorResult.data || vendorResult);
+    } else {
+      toast.error('Failed To Load Vendor Breakdown Table', {
+        description: vendorResult.error || 'Please try again.'
+      });
+    }
   }, [dashboardApi.loading, primaryDateRange, secondaryDateRange, lineOfBusiness, timeFrame]);
 
   const value = {
     // Data
     rawData,
     filteredData,
-    
+    vendorData,
+
     // Loading & Error
     dashboardLoading: dashboardApi.loading,
     error: dashboardApi.error,
-    
+
     // Date Ranges
     primaryDateRange,
     setPrimaryDateRange,
     secondaryDateRange,
     setSecondaryDateRange,
-    
+
     // Filters
     lineOfBusiness,
     setLineOfBusiness,
@@ -170,7 +199,7 @@ export function DBAuthProvider({ children }) {
     timeFrame,
     setTimeFrame,
     timeFrameArray,
-    
+
     // Actions
     fetchData,
     refreshData: fetchData

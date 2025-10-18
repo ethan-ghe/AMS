@@ -1,7 +1,7 @@
 {
   "name": "dashboard",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.3",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -71,7 +71,6 @@
     "cross-env": "^7.0.3",
     "electron": "^38.2.2",
     "electron-builder": "^26.0.12",
-    "electron-is-dev": "^3.0.1",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
@@ -82,41 +81,63 @@
   "overrides": {
     "react-is": "^19.0.0-rc-69d4b800-20241021"
   },
-"build": {
-    "appId": "com.gethealthe.ams",
-    "productName": "GHE AMS",
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "node_modules/**/*"
+ "build": {
+  "appId": "com.gethealthe.ams",
+  "productName": "GHE AMS",
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "node_modules/**/*"
+  ],
+  "directories": {
+    "buildResources": "resources",
+    "output": "release"
+  },
+  "mac": {
+    "category": "public.app-category.utilities",
+    "target": [
+      "dmg",
+      "zip"
     ],
-    "directories": {
-      "buildResources": "resources",
-      "output": "release"
-    },
-    "mac": {
-      "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"],
-      "icon": "resources/icon.icns"
-    },
-    "win": {
-      "target": ["nsis", "portable"],
-      "icon": "resources/icon.ico"
-    },
-    "linux": {
-      "target": ["AppImage", "deb"],
-      "category": "Utility",
-      "icon": "resources/icon.png"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "ethan-ghe",
-      "repo": "AMS",
-      "releaseType": "release"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "icon": "resources/icon.icns",
+    "identity": null,
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "resources/icon.ico"
+  },
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb"
+    ],
+    "category": "Utility",
+    "icon": "resources/icon.png"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "ethan-ghe",
+    "repo": "AMS",
+    "releaseType": "release"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
   }
+}
 }

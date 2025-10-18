@@ -4,6 +4,7 @@ import { useAuth } from "@/contextproviders/AuthContext";
 import { LoginForm } from "@/components/login-form";
 import { OTPForm } from "../components/otp-form";
 import { toast } from "sonner"
+import gheLogo from '../assets/ghe-logo-blue.png';
 
 function Login() {
   const { login, forgotPassword, verifyOTP } = useAuth();
@@ -26,9 +27,9 @@ function Login() {
         setEmail(data.email);
         // Show OTP form
         setAwaitingOTP(true);
-        toast.success("OTP sent", {
+        /*toast.success("OTP sent", {
           description: "A verification code has been sent to your email."
-        });
+        });*/
       }
     } catch (error) {
       toast.error("Login failed", {
@@ -82,25 +83,33 @@ function Login() {
   };
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        {!awaitingOTP ? (
-          <LoginForm
-            onSubmit={handleLogin}
-            isSubmitting={isSubmitting}
-            onForgotPasswordClick={() => setForgotPasswordOpen(true)}
-            forgotPasswordOpen={forgotPasswordOpen}
-            setForgotPasswordOpen={setForgotPasswordOpen}
-            onForgotPasswordSubmit={handleForgotPassword}
-          />
-        ) : (
-          <OTPForm 
-            onVerify={handleVerifyOTP}
-            isVerifying={isVerifying}
-          />
-        )}
-      </div>
+<div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+  <div className="w-full max-w-sm space-y-6"> {/* Single container with vertical spacing */}
+    {/* Logo */}
+    <div className="flex justify-center">
+      <img src={gheLogo} alt="GHE Logo" className="h-12 w-auto" /> {/* Adjust h-12 to your preferred size */}
     </div>
+    
+    {/* Login/OTP Form */}
+    <div>
+      {!awaitingOTP ? (
+        <LoginForm
+          onSubmit={handleLogin}
+          isSubmitting={isSubmitting}
+          onForgotPasswordClick={() => setForgotPasswordOpen(true)}
+          forgotPasswordOpen={forgotPasswordOpen}
+          setForgotPasswordOpen={setForgotPasswordOpen}
+          onForgotPasswordSubmit={handleForgotPassword}
+        />
+      ) : (
+        <OTPForm
+          onVerify={handleVerifyOTP}
+          isVerifying={isVerifying}
+        />
+      )}
+    </div>
+  </div>
+</div>
   );
 }
 

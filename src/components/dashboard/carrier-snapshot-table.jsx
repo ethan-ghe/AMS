@@ -1,4 +1,3 @@
-// src/components/agent-snapshot-table.jsx
 import React, { useMemo, useState } from "react";
 import {
   flexRender,
@@ -29,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, UserCircle, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
+import { MoreHorizontal, Building2, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -46,149 +45,118 @@ import {
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
-import { useConfig } from "../../contextproviders/ConfigContext";
 import { DBContext } from "@/contextproviders/DashboardContext";
 
-export function AgentSnapshotTable() {
-  const { configData } = useConfig();
+export function CarrierSnapshotTable() {
   const { rawData } = DBContext();
   const navigate = useNavigate();
 
-  const generatedData = useMemo(() => {
-    if (!rawData?.salesByAgent && !rawData?.callsByAgent) {
-      return [];
-    }
+const generatedData = useMemo(() => {
+  if (!rawData?.salesByCarrier) {
+    return [];
+  }
 
-    // Create maps for quick lookup
-    const salesMap = new Map(
-      (rawData.salesByAgent || []).map(s => [s.agentId, s])
-    );
-    const callsMap = new Map(
-      (rawData.callsByAgent || []).map(c => [c.agentId, c])
-    );
+  const carriers = rawData.salesByCarrier.map(carrier => ({
+    carrier: carrier.carrier,
+    topContract: carrier.topContract || null,
+    saleCount: carrier.saleCount || 0
+  }));
 
-    // Get all unique agent IDs
-    const allAgentIds = new Set([
-      ...salesMap.keys(),
-      ...callsMap.keys()
-    ]);
 
-    return Array.from(allAgentIds).map(agentId => {
-      const sales = salesMap.get(agentId);
-      const calls = callsMap.get(agentId);
+  const totalSales = carriers.reduce((sum, carrier) => sum + carrier.saleCount, 0);
 
-      // Find agent name from config
-      const agentInfo = configData?.agentData?.find(a => a.agentid === agentId);
-      const agentName = agentInfo ? `${agentInfo.fname} ${agentInfo.lname}` : agentId;
-
-      const leadCost = calls?.totalCost || 0;
-      const coreSales = sales?.saleCount || 0;
-      const cpa = coreSales > 0 && leadCost > 0 ? leadCost / coreSales : 0;
-
-      return {
-        agentid: agentName,
-        agentIdRaw: agentId,
-        coreSales: coreSales,
-        secondarySales: 0,
-        callCount: calls?.callCount || 0,
-        leadCost: leadCost,
-        cpa: cpa
-      };
-    }).sort((a, b) => b.coreSales - a.coreSales); // Sort by sales descending
-  }, [rawData, configData]);
+  return carriers
+    .map(carrier => ({
+      ...carrier,
+      percentOfTotal: totalSales > 0 ? (carrier.saleCount / totalSales) * 100 : 0
+    }))
+    .sort((a, b) => b.saleCount - a.saleCount);
+}, [rawData]);
 
   const [columnFilters, setColumnFilters] = useState([]);
 
-  const columns = useMemo(() => [
-    {
-      accessorKey: "agentid",
-      header: "Agent Name",
-      size: 0.2467 * 100,
-      maxSize: 0.2467 * 100,
-      cell: ({ row }) => (
-        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span>{row.getValue("agentid")}</span>
-        </div>
-      ),
-      enableSorting: true,
-      filterFn: "includesString",
+const columns = useMemo(() => [
+  {
+    accessorKey: "carrier",
+    header: "Carrier Name",
+    size: 40,
+    maxSize: 40,
+    cell: ({ row }) => (
+      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span>{row.getValue("carrier")}</span>
+      </div>
+    ),
+    enableSorting: true,
+    filterFn: "includesString",
+  },
+  {
+    accessorKey: "topContract",
+    header: "Top Contract",
+    size: 23,
+    maxSize: 23,
+    cell: ({ row }) => (
+      <div className="text-center" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span>{row.getValue("topContract") || "-"}</span>
+      </div>
+    ),
+    enableSorting: true,
+    sortingFn: "basic",
+  },
+  {
+    accessorKey: "saleCount",
+    header: "Sales",
+    size: 15,
+    maxSize: 15,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <span>{row.getValue("saleCount")}</span>
+      </div>
+    ),
+    enableSorting: true,
+    sortingFn: "basic",
+  },
+  {
+    accessorKey: "percentOfTotal",
+    header: "% of Total",
+    size: 12,
+    maxSize: 12,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <span>{row.getValue("percentOfTotal").toFixed(1)}%</span>
+      </div>
+    ),
+    enableSorting: true,
+    sortingFn: "basic",
+  },
+  {
+    id: "actions",
+    size: 10,
+    maxSize: 10,
+    cell: ({ row }) => {
+      const carrier = row.original;
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => navigate(`/carrier-profile/${encodeURIComponent(carrier.carrier)}`)}
+              className="cursor-pointer"
+            >
+              <Building2 className="mr-2 h-4 w-4" />
+              View carrier profile
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
     },
-    {
-      accessorKey: "callCount",
-      header: "Calls",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => <span>{row.getValue("callCount")}</span>,
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "coreSales",
-      header: "Core Sales",
-      size: 0.21 * 100,
-      maxSize: 0.21 * 100,
-      cell: ({ row }) => <span>{row.getValue("coreSales")}</span>,
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "leadCost",
-      header: "Lead Cost",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => {
-        const cost = row.getValue("leadCost");
-        return <span>${cost ? (cost / 100).toFixed(2) : '0.00'}</span>;
-      },
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "cpa",
-      header: "CPA",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => {
-        const cpa = row.getValue("cpa");
-        const coreSales = row.getValue("coreSales");
-        
-        if (coreSales === 0) return <span>-</span>;
-        if (cpa === 0) return <span>$0.00</span>;
-        
-        return <span>${(cpa / 100).toFixed(2)}</span>;
-      },
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      id: "actions",
-      size: 0.0833 * 100,
-      maxSize: 0.0833 * 100,
-      cell: ({ row }) => {
-        const agent = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => navigate(`/agent-profile/${agent.agentIdRaw}`)}
-                className="cursor-pointer"
-              >
-                <UserCircle className="mr-2 h-4 w-4" />
-                View agent profile
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-      enableSorting: false,
-    },
-  ], [navigate]);
+    enableSorting: false,
+  },
+], [navigate]);
 
   const data = generatedData || [];
 
@@ -216,15 +184,15 @@ export function AgentSnapshotTable() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Agent Snapshot</CardTitle>
-              <CardDescription>Overview of agent sales performance</CardDescription>
+              <CardTitle>Carrier Snapshot</CardTitle>
+              <CardDescription>Overview of sales performance by carrier</CardDescription>
             </div>
             <div className="flex items-center py-4">
               <Input
-                placeholder="Search by agent name..."
-                value={table.getColumn("agentid")?.getFilterValue() ?? ""}
+                placeholder="Search by carrier name..."
+                value={table.getColumn("carrier")?.getFilterValue() ?? ""}
                 onChange={(event) =>
-                  table.getColumn("agentid")?.setFilterValue(event.target.value)
+                  table.getColumn("carrier")?.setFilterValue(event.target.value)
                 }
                 className="max-w-sm"
               />

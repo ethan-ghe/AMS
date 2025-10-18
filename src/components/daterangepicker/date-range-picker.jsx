@@ -90,7 +90,7 @@ export const DateRangePicker = ({
   const openedRangeRef = useRef()
   const openedRangeCompareRef = useRef()
 
-  const [selectedPreset, setSelectedPreset] = useState("thisWeek")
+  const [selectedPreset, setSelectedPreset] = useState("today")
 
   const [isSmallScreen, setIsSmallScreen] = useState(
     typeof window !== 'undefined' ? window.innerWidth < 960 : false
@@ -99,7 +99,7 @@ export const DateRangePicker = ({
   const handleInit = (range) =>{
     setPrimaryDateRange(range);
     setSecondaryDateRange(range);
-    setPreset('thisWeek');
+    setPreset('today');
   }
 
   useEffect(()=>{
@@ -110,7 +110,7 @@ export const DateRangePicker = ({
     const handleResize = () => {
       setIsSmallScreen(window.innerWidth < 960)
     }
-    const foundRange = getPresetRange('thisWeek');
+    const foundRange = getPresetRange('today');
     handleInit(foundRange);
     window.addEventListener('resize', handleResize)
 
@@ -471,22 +471,28 @@ export const DateRangePicker = ({
               )}
               <div>
                 <Calendar
-                  mode="range"
-                  onSelect={(value) => {
-                    if (value?.from != null) {
-                      setRange({ from: value.from, to: value?.to })
-                    }
-                  }}
-                  selected={range}
-                  numberOfMonths={isSmallScreen ? 1 : 2}
-                  defaultMonth={
-                    new Date(
-                      new Date().setMonth(
-                        new Date().getMonth() - (isSmallScreen ? 0 : 1)
+                    mode="range"
+                    onSelect={(value) => {
+                      if (value?.from != null) {
+                        const from = new Date(value.from)
+                        from.setHours(0, 0, 0, 0)
+                        
+                        const to = value?.to ? new Date(value.to) : new Date(value.from)
+                        to.setHours(23, 59, 59, 999)
+                        
+                        setRange({ from, to })
+                      }
+                    }}
+                    selected={range}
+                    numberOfMonths={isSmallScreen ? 1 : 2}
+                    defaultMonth={
+                      new Date(
+                        new Date().setMonth(
+                          new Date().getMonth() - (isSmallScreen ? 0 : 1)
+                        )
                       )
-                    )
-                  }
-                />
+                    }
+                  />
               </div>
             </div>
           </div>

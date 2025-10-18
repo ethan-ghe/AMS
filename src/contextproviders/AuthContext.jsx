@@ -23,7 +23,6 @@ export function AuthProvider({ children }) {
       const result = await CognitoAuthService.getCurrentUser();
       
       if (result.success) {
-        console.log('✅ Current user found:', result);
         setUser(result.user);
       } else {
         console.log('ℹ️ No authenticated user found');
@@ -110,7 +109,6 @@ export function AuthProvider({ children }) {
         setUser(result.user);
         setMfaSession(null);
         setLoginStep('initial');
-        console.log('✅ MFA verification successful');
         return { success: true };
       } else {
         return { success: false, error: result.error };
@@ -133,7 +131,6 @@ export function AuthProvider({ children }) {
       setUser(null);
       setMfaSession(null);
       setLoginStep('initial');
-      console.log('✅ Logout successful');
     } catch (error) {
       console.error('❌ Logout error:', error);
       // Clear state even if logout fails
@@ -149,7 +146,6 @@ export function AuthProvider({ children }) {
       const result = await CognitoAuthService.forgotPassword(username);
       
       if (result.success) {
-        console.log('✅ Password reset code sent');
         return {
           success: true,
           message: result.message || 'Password reset code sent to your email'
@@ -172,7 +168,6 @@ export function AuthProvider({ children }) {
       const result = await CognitoAuthService.confirmForgotPassword(username, code, newPassword);
       
       if (result.success) {
-        console.log('✅ Password reset successful');
         return { success: true };
       } else {
         return { success: false, error: result.error };

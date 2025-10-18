@@ -1,4 +1,4 @@
-// src/components/agent-snapshot-table.jsx
+// src/components/vendor-snapshot-table.jsx
 import React, { useMemo, useState } from "react";
 import {
   flexRender,
@@ -46,48 +46,48 @@ import {
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
-import { useConfig } from "../../contextproviders/ConfigContext";
 import { DBContext } from "@/contextproviders/DashboardContext";
+import { useConfig } from "../../contextproviders/ConfigContext";
 
-export function AgentSnapshotTable() {
-  const { configData } = useConfig();
+export function VendorSnapshotTable() {
   const { rawData } = DBContext();
+  const { configData } = useConfig();
   const navigate = useNavigate();
 
+
   const generatedData = useMemo(() => {
-    if (!rawData?.salesByAgent && !rawData?.callsByAgent) {
+    if (!rawData?.salesByVendor && !rawData?.callsByVendor) {
       return [];
     }
 
     // Create maps for quick lookup
     const salesMap = new Map(
-      (rawData.salesByAgent || []).map(s => [s.agentId, s])
+      (rawData.salesByVendor || []).filter(v => v.vendorId !== null).map(s => [s.vendorId, s])
     );
     const callsMap = new Map(
-      (rawData.callsByAgent || []).map(c => [c.agentId, c])
+      (rawData.callsByVendor || []).map(c => [c.vendorId, c])
     );
 
-    // Get all unique agent IDs
-    const allAgentIds = new Set([
+    // Get all unique vendor IDs
+    const allVendorIds = new Set([
       ...salesMap.keys(),
       ...callsMap.keys()
     ]);
 
-    return Array.from(allAgentIds).map(agentId => {
-      const sales = salesMap.get(agentId);
-      const calls = callsMap.get(agentId);
+    return Array.from(allVendorIds).map(vendorId => {
+      const sales = salesMap.get(vendorId);
+      const calls = callsMap.get(vendorId);
 
-      // Find agent name from config
-      const agentInfo = configData?.agentData?.find(a => a.agentid === agentId);
-      const agentName = agentInfo ? `${agentInfo.fname} ${agentInfo.lname}` : agentId;
+      const vendorInfo = configData?.vendorData?.find(v => v.vid === vendorId);
+      const vendorName = vendorInfo?.friendly_name || vendorInfo?.friendlyname || vendorId;
 
       const leadCost = calls?.totalCost || 0;
       const coreSales = sales?.saleCount || 0;
       const cpa = coreSales > 0 && leadCost > 0 ? leadCost / coreSales : 0;
 
       return {
-        agentid: agentName,
-        agentIdRaw: agentId,
+        vendorid: vendorName,
+        vendorIdRaw: vendorId,
         coreSales: coreSales,
         secondarySales: 0,
         callCount: calls?.callCount || 0,
@@ -101,13 +101,13 @@ export function AgentSnapshotTable() {
 
   const columns = useMemo(() => [
     {
-      accessorKey: "agentid",
-      header: "Agent Name",
+      accessorKey: "vendorid",
+      header: "Vendor Name",
       size: 0.2467 * 100,
       maxSize: 0.2467 * 100,
       cell: ({ row }) => (
         <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span>{row.getValue("agentid")}</span>
+          <span>{row.getValue("vendorid")}</span>
         </div>
       ),
       enableSorting: true,
@@ -165,7 +165,7 @@ export function AgentSnapshotTable() {
       size: 0.0833 * 100,
       maxSize: 0.0833 * 100,
       cell: ({ row }) => {
-        const agent = row.original;
+        const vendor = row.original;
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -176,11 +176,11 @@ export function AgentSnapshotTable() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => navigate(`/agent-profile/${agent.agentIdRaw}`)}
+                onClick={() => navigate(`/vendor-profile/${vendor.vendorIdRaw}`)}
                 className="cursor-pointer"
               >
                 <UserCircle className="mr-2 h-4 w-4" />
-                View agent profile
+                View vendor profile
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -216,15 +216,15 @@ export function AgentSnapshotTable() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Agent Snapshot</CardTitle>
-              <CardDescription>Overview of agent sales performance</CardDescription>
+              <CardTitle>Vendor Snapshot</CardTitle>
+              <CardDescription>Overview of vendor sales performance</CardDescription>
             </div>
             <div className="flex items-center py-4">
               <Input
-                placeholder="Search by agent name..."
-                value={table.getColumn("agentid")?.getFilterValue() ?? ""}
+                placeholder="Search by vendor name..."
+                value={table.getColumn("vendorid")?.getFilterValue() ?? ""}
                 onChange={(event) =>
-                  table.getColumn("agentid")?.setFilterValue(event.target.value)
+                  table.getColumn("vendorid")?.setFilterValue(event.target.value)
                 }
                 className="max-w-sm"
               />

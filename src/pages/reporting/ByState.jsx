@@ -485,11 +485,14 @@ function StateBreakdown() {
                                         <SelectItem key='All' value='All'>
                                             All
                                         </SelectItem>
-                                        {configData?.zipData?.filter(s=>s.state_name !== null)?.map((zip) => (
-                                            <SelectItem key={zip.state_name} value={zip.state_name}>
+                                       {configData?.zipData
+                                            ?.filter(s => s.state_name !== null)
+                                            ?.sort((a, b) => a.state_name.localeCompare(b.state_name))
+                                            .map((zip) => (
+                                                <SelectItem key={zip.state_name} value={zip.state_name}>
                                                 {zip.state_name}
-                                            </SelectItem>
-                                        ))}
+                                                </SelectItem>
+                                            ))}
                                     </SelectContent>
                                 </Select>
                             </div>

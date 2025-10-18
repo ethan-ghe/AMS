@@ -1,14 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { Line,
+import {
+  Line,
   Bar,
   ComposedChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
-  YAxis  } from "recharts"
+  YAxis
+} from "recharts"
 
 import {
   Card,
@@ -26,25 +28,25 @@ const chartConfig = {
   },
   inbound: {
     label: "Inbound",
-    color: "hsl(var(--primary))",
+    color: "hsl(var(--primary))", // Blue
   },
   outbound: {
-    label: "Outbound",
-    color: "hsl(var(--secondary))",
+    label: "Outbound", 
+    color: "hsl(var(--secondary))", // Green
   },
   primary: {
     label: "Primary",
-    color: "hsl(var(--warning))",
+    color: "hsl(var(--primary))", // Blue bars
   },
   secondary: {
     label: "Secondary",
-    color: "hsl(var(--destructive))",
+    color: "hsl(var(--destructive))", // Red bars
   }
 }
 
 const ChartContainer = ({ children, config, className }) => {
   return (
-    <div 
+    <div
       className={className}
       style={{
         "--color-inbound": config.inbound.color,
@@ -58,10 +60,24 @@ const ChartContainer = ({ children, config, className }) => {
   )
 }
 
-// ✅ Robust date formatter that handles different formats
+const convertUTCHourToEST = (utcHour, referenceDate) => {
+  // Create a date object with the UTC hour
+  const date = new Date(referenceDate);
+  date.setUTCHours(utcHour, 0, 0, 0);
+  
+  // Convert to EST/EDT using toLocaleString
+  const estTimeString = date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+  });
+  
+  return parseInt(estTimeString, 10);
+};
+
 const formatDateDisplay = (dateString) => {
   if (!dateString) return '';
-  
+
   try {
     // Handle "2025-09-02" format from Postgres
     let date;
@@ -71,12 +87,12 @@ const formatDateDisplay = (dateString) => {
     } else {
       date = new Date(dateString);
     }
-    
+
     // Check if date is valid
     if (isNaN(date.getTime())) {
       return dateString;
     }
-    
+
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -87,29 +103,29 @@ const formatDateDisplay = (dateString) => {
   }
 };
 
-// ✅ Helper to get grouping key based on timeFrame
+
 const getGroupingKey = (dateString, timeFrame) => {
   try {
     const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));
     const date = new Date(year, month - 1, day);
-    
+
     switch (timeFrame) {
       case 'Day Of Week':
         const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         return dayNames[date.getDay()];
-        
+
       case 'Weekly':
         // Get start of week (Sunday)
         const dayOfWeek = date.getDay();
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - dayOfWeek);
         return weekStart.toISOString().split('T')[0];
-        
+
       case 'Monthly':
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'];
         return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-        
+
       default:
         return dateString;
     }
@@ -121,24 +137,27 @@ const getGroupingKey = (dateString, timeFrame) => {
 
 export function InteractiveChart() {
   const { rawData, primaryDateRange, timeFrame, loading } = DBContext();
-  
+
   const generatedData = React.useMemo(() => {
     if (!rawData || !timeFrame || loading) {
       return [];
     }
-    
-    // ✅ Use hourly data for Hourly timeframe, daily for others
+
     const useHourly = timeFrame === 'Hourly';
     const callsData = useHourly ? (rawData.callsByHour || []) : (rawData.callsByDay || []);
     const salesData = useHourly ? (rawData.coreSalesByHour || []) : (rawData.coreSalesByDay || []);
-    
-    // ✅ For Daily and Hourly - simple merge
+
     if (timeFrame === 'Daily' || timeFrame === 'Hourly') {
       const dataMap = new Map();
       const key = useHourly ? 'hour' : 'date';
       
+      const referenceDate = primaryDateRange?.from || new Date();
+
       callsData.forEach(call => {
-        const timePoint = call[key];
+        const timePoint = useHourly 
+          ? convertUTCHourToEST(call[key], referenceDate)
+          : call[key];
+        
         dataMap.set(timePoint, {
           date: timePoint,
           inbound: call.inbound || 0,
@@ -147,9 +166,12 @@ export function InteractiveChart() {
           secondary: 0
         });
       });
-      
+
       salesData.forEach(sale => {
-        const timePoint = sale[key];
+        const timePoint = useHourly 
+          ? convertUTCHourToEST(sale[key], referenceDate)
+          : sale[key];
+        
         if (dataMap.has(timePoint)) {
           dataMap.get(timePoint).primary = sale.count || 0;
         } else {
@@ -162,7 +184,7 @@ export function InteractiveChart() {
           });
         }
       });
-      
+
       let result = Array.from(dataMap.values());
       result.sort((a, b) => {
         if (useHourly) {
@@ -170,13 +192,12 @@ export function InteractiveChart() {
         }
         return a.date.localeCompare(b.date);
       });
-      
+
       return result;
     }
-    
-    // ✅ For Day Of Week, Weekly, Monthly - group daily data
+
     const groupedMap = new Map();
-    
+
     // Group calls data
     callsData.forEach(call => {
       const groupKey = getGroupingKey(call.date, timeFrame);
@@ -194,7 +215,7 @@ export function InteractiveChart() {
       group.inbound += call.inbound || 0;
       group.outbound += call.outbound || 0;
     });
-    
+
     // Group sales data
     salesData.forEach(sale => {
       const groupKey = getGroupingKey(sale.date, timeFrame);
@@ -211,10 +232,9 @@ export function InteractiveChart() {
       const group = groupedMap.get(groupKey);
       group.primary += sale.count || 0;
     });
-    
+
     let result = Array.from(groupedMap.values());
-    
-    // ✅ Sort based on timeFrame
+
     switch (timeFrame) {
       case 'Day Of Week':
         const dayOrder = {
@@ -223,25 +243,25 @@ export function InteractiveChart() {
         };
         result.sort((a, b) => dayOrder[a.date] - dayOrder[b.date]);
         break;
-        
+
       case 'Weekly':
       case 'Monthly':
         result.sort((a, b) => a._sortKey.localeCompare(b._sortKey));
         break;
-        
+
       default:
         break;
     }
-    
+
     // Remove sorting helper
     result.forEach(r => delete r._sortKey);
-    
+
     return result;
   }, [rawData, timeFrame, loading]);
 
   const formatAxisTickByTimeFrame = (value) => {
     if (!value) return '';
-    
+
     switch (timeFrame) {
       case 'Hourly':
         return `${value}:00`;
@@ -263,12 +283,12 @@ export function InteractiveChart() {
       return "All time data";
     }
 
-    const fromDate = primaryDateRange.from instanceof Date 
-      ? primaryDateRange.from 
+    const fromDate = primaryDateRange.from instanceof Date
+      ? primaryDateRange.from
       : new Date(primaryDateRange.from);
-    
-    const toDate = primaryDateRange.to instanceof Date 
-      ? primaryDateRange.to 
+
+    const toDate = primaryDateRange.to instanceof Date
+      ? primaryDateRange.to
       : new Date(primaryDateRange.to);
 
     const formatDate = (date) => {
@@ -296,7 +316,7 @@ export function InteractiveChart() {
             className="aspect-auto h-[250px] w-full"
           >
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart 
+              <ComposedChart
                 data={generatedData}
                 margin={{ top: 10, right: 30, left: 30, bottom: 0 }}
               >
@@ -309,40 +329,38 @@ export function InteractiveChart() {
                   minTickGap={32}
                   tickFormatter={formatAxisTickByTimeFrame}
                 />
-                {/* ✅ Left Y-axis for Calls (higher volume) */}
-                <YAxis 
+                <YAxis
                   yAxisId="left"
                   orientation="left"
                   axisLine={false}
                   tickLine={false}
                   tickMargin={8}
-                  label={{ 
-                    value: 'Calls', 
-                    angle: -90, 
+                  label={{
+                    value: 'Calls',
+                    angle: -90,
                     position: 'left',
                     offset: 10,
-                    style: { textAnchor: 'middle', fontSize: '12px' } 
+                    style: { textAnchor: 'middle', fontSize: '12px' }
                   }}
                 />
-                {/* ✅ Right Y-axis for Sales (lower volume) */}
-                <YAxis 
+                <YAxis
                   yAxisId="right"
                   orientation="right"
                   axisLine={false}
                   tickLine={false}
                   tickMargin={8}
-                  label={{ 
-                    value: 'Sales', 
-                    angle: -90, 
+                  label={{
+                    value: 'Sales',
+                    angle: -90,
                     position: 'right',
                     offset: 10,
-                    style: { textAnchor: 'middle', fontSize: '12px' } 
+                    style: { textAnchor: 'middle', fontSize: '12px' }
                   }}
                 />
-                <Tooltip 
+                <Tooltip
                   cursor={{ stroke: "var(--muted)", strokeWidth: 1, strokeDasharray: "4 4" }}
-                  contentStyle={{ 
-                    background: "var(--background)", 
+                  contentStyle={{
+                    background: "var(--background)",
                     border: "1px solid var(--border)",
                     borderRadius: "8px",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
@@ -357,29 +375,27 @@ export function InteractiveChart() {
                     return value;
                   }}
                 />
-                {/* ✅ Sales bars on RIGHT axis */}
                 <Bar
                   dataKey="primary"
                   name="Primary"
-                  fill="var(--color-primary)"
+                  fill="#2f6ea8"  // Blue
                   yAxisId="right"
                   barSize={20}
                 />
                 <Bar
                   dataKey="secondary"
                   name="Secondary"
-                  fill="var(--color-secondary)"
+                  fill="#ef4444"  // Red
                   yAxisId="right"
                   barSize={20}
                 />
-                {/* ✅ Call lines on LEFT axis */}
                 <Line
                   dataKey="inbound"
                   name="Inbound"
                   type="monotone"
-                  stroke="#000000"
+                  stroke="#2f6ea8"  // Blue
                   strokeWidth={3}
-                  dot={{ r: 3, fill: "#000000", stroke: "#000000" }}
+                  dot={{ r: 3, fill: "#2f6ea8", stroke: "#2f6ea8" }}
                   yAxisId="left"
                   connectNulls={true}
                 />
@@ -387,9 +403,9 @@ export function InteractiveChart() {
                   dataKey="outbound"
                   name="Outbound"
                   type="monotone"
-                  stroke="#000000"
+                  stroke="#10b981"  // Green
                   strokeWidth={3}
-                  dot={{ r: 3, fill: "#000000", stroke: "#000000" }}
+                  dot={{ r: 3, fill: "#10b981", stroke: "#10b981" }}
                   yAxisId="left"
                   connectNulls={true}
                 />

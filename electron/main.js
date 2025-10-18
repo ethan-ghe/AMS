@@ -1,19 +1,23 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
-const url = require('url');
-const isDev = require('electron-is-dev');
 
 let mainWindow;
 let updateWindow;
 
+// Simple dev detection - no package needed
+const isDev = !app.isPackaged;
+
 // Configure auto-updater
-autoUpdater.autoDownload = true; // Auto-download updates
+autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
-// Disable auto-updater in development
-if (isDev) {
-  autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml');
+if (!isDev) {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'ethan-ghe',
+    repo: 'AMS'
+  });
 }
 
 function createUpdateWindow() {
@@ -35,34 +39,27 @@ function createUpdateWindow() {
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
       backgroundThrottling: false,
       partition: 'persist:main'
     },
-    show: false // Don't show until ready
+    show: false
   });
-  
+
   mainWindow.maximize();
 
-  // Load the app
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
     mainWindow.show();
   } else {
-    mainWindow.loadURL(
-      url.format({
-        pathname: path.join(__dirname, '../dist/index.html'),
-        protocol: 'file:',
-        slashes: true
-      })
-    );
-    
-    mainWindow.once('ready-to-show', () => {
-      mainWindow.show();
-    });
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+      .then(() => mainWindow.show())
+      .catch(err => console.error('Failed to load:', err));
   }
 
   mainWindow.on('closed', () => {
@@ -97,8 +94,6 @@ autoUpdater.on('update-available', (info) => {
 autoUpdater.on('update-not-available', (info) => {
   console.log('Update not available. App is up to date.');
   sendUpdateStatus('App is up to date!', 'Starting...');
-  
-  // Close update window and open main window
   setTimeout(() => {
     closeUpdateWindow();
     createMainWindow();
@@ -108,7 +103,6 @@ autoUpdater.on('update-not-available', (info) => {
 autoUpdater.on('download-progress', (progressObj) => {
   const percent = progressObj.percent;
   console.log(`Download progress: ${Math.round(percent)}%`);
-  
   if (updateWindow) {
     updateWindow.webContents.send('update-progress', percent);
   }
@@ -117,46 +111,34 @@ autoUpdater.on('download-progress', (progressObj) => {
 autoUpdater.on('update-downloaded', (info) => {
   console.log('Update downloaded. Installing...');
   sendUpdateStatus('Update downloaded!', 'Installing and restarting...');
-  
-  // Install and restart after a brief delay
   setTimeout(() => {
-    autoUpdater.quitAndInstall(false, true);
+    autoUpdater.quitAndInstall(true, true);
   }, 2000);
 });
 
 autoUpdater.on('error', (err) => {
   console.error('Update error:', err);
+  console.error('Error message:', err.message);
+  console.error('Error stack:', err.stack);
   
-  // Show error but continue to main app
+  // Show the error to the user so you can see what's happening
+  const errorMessage = `Update Error:\n\n${err.message}\n\nStack:\n${err.stack}`;
+  
   if (updateWindow) {
-    sendUpdateStatus('Update check failed', 'Continuing to app...');
+    sendUpdateStatus('Update failed. See error details.', 'Error occurred');
   }
   
   setTimeout(() => {
-    closeUpdateWindow();
-    createMainWindow();
-  }, 2000);
-  
-  // Optional: Show error dialog
-  if (mainWindow) {
-    dialog.showMessageBox(mainWindow, {
-      type: 'warning',
-      title: 'Update Error',
-      message: 'Could not check for updates. You may be running an outdated version.',
-      detail: err.message
-    });
-  }
+    dialog.showErrorBox('Update Error Details', errorMessage);
+    app.quit();
+  }, 5000);
 });
 
 app.on('ready', () => {
   if (isDev) {
-    // Skip update check in development
     createMainWindow();
   } else {
-    // Production: Show update window and check for updates
     createUpdateWindow();
-    
-    // Give the window time to render before checking
     setTimeout(() => {
       autoUpdater.checkForUpdates();
     }, 1000);

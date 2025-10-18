@@ -476,9 +476,11 @@ function VendorBreakdown() {
                                         <SelectItem key='All' value='All'>
                                             All
                                         </SelectItem>
-                                        {configData?.vendorData?.map((vendor) => (
+                                        {configData?.vendorData
+                                        ?.sort((a, b) => a.friendlyname.localeCompare(b.friendlyname))
+                                        .map((vendor) => (
                                             <SelectItem key={vendor.vid} value={vendor.vid}>
-                                                {vendor?.friendlyname}
+                                            {vendor?.friendlyname}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

@@ -1,8 +1,8 @@
-// src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"; // Changed from BrowserRouter
 import { AuthProvider, useAuth } from "./contextproviders/AuthContext";
 import { ConfigContextAuthProvider } from "./contextproviders/ConfigContext";
 import { DBAuthProvider } from "./contextproviders/DashboardContext";
+import { SplashScreen } from "./components/splashscreen";
 import ComingSoon from "./pages/ComingSoon";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -13,21 +13,17 @@ import VendorBreakdown from "./pages/reporting/ByVendor";
 
 function ProtectedRoute() {
   const { isAuthenticated, loading } = useAuth();
-  
   if (loading) {
-    return <div>Loading...</div>;
+    return <SplashScreen />;
   }
-  
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" />;
 }
 
 function PublicRoute() {
   const { isAuthenticated, loading } = useAuth();
-  
   if (loading) {
-    return <div>Loading...</div>;
+    return <SplashScreen />;
   }
-  
   return isAuthenticated ? <Navigate to="/dashboard" /> : <Outlet />;
 }
 
@@ -41,54 +37,38 @@ function ProtectedWithConfig() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter> {/* Changed from BrowserRouter */}
       <AuthProvider>
         <Routes>
           {/* Public routes - NO config context */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<Login />} />
           </Route>
-
+          
           {/* Protected routes - WITH config context */}
           <Route element={<ProtectedRoute />}>
             <Route element={<ProtectedWithConfig />}>
-              <Route 
-                path="/dashboard" 
+              <Route
+                path="/dashboard"
                 element={
                   <DBAuthProvider>
                     <Dashboard />
                   </DBAuthProvider>
-                } 
+                }
               />
-              <Route 
-                path="/reporting/agent" 
-                element={
-                  <AgentBreakdown />
-                } 
-              />
-               <Route 
-                path="/reporting/state" 
-                element={
-                  <StateBreakdown />
-                } 
-              />
-              <Route 
-                path="/reporting/vendor" 
-                element={
-                  <VendorBreakdown />
-                } 
-              />
-              {/* All other protected routes get config too */}
+              <Route path="/reporting/agent" element={<AgentBreakdown />} />
+              <Route path="/reporting/state" element={<StateBreakdown />} />
+              <Route path="/reporting/vendor" element={<VendorBreakdown />} />
             </Route>
           </Route>
-
+          
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<ComingSoon/>}/>
+          <Route path="*" element={<ComingSoon />} />
         </Routes>
       </AuthProvider>
       <Toaster />
-    </BrowserRouter>
-  );
+    </HashRouter>
+  )
 }
 
 export default App;

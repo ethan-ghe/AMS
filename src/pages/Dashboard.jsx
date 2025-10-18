@@ -27,7 +27,9 @@ import { InteractiveChart } from "@/components/dashboard/interactive-chart"
 import { DateRangePicker } from "@/components/daterangepicker/date-range-picker"
 import { AgentSnapshotTable } from "@/components/dashboard/agent-snapshot-table"
 import { GeoSnapshotTable } from "@/components/dashboard/geo-snapshot-table"
-import { VendorSnapshotTable } from "../components/dashboard/vendor-snapshot-table"
+//import { VendorSnapshotTable } from "../components/dashboard/vendor-snapshot-table"
+import {VendorBreakdown} from "../components/dashboard/vendor-snapshot-table"
+import { CarrierSnapshotTable } from "../components/dashboard/carrier-snapshot-table"
 import { EnrollmentCodeChart } from "../components/dashboard/enrollment-code-chart"
 import { useAuth } from "@/contextproviders/AuthContext";
 import { DBContext } from "@/contextproviders/DashboardContext";
@@ -143,8 +145,12 @@ function Dashboard() {
             <GeoSnapshotTable />
           </div>
           <div>
-            <VendorSnapshotTable />
+            <CarrierSnapshotTable />
+            {/* <VendorSnapshotTable /> */}
           </div>
+        </div>
+        <div className="w-full px-4 my-6 md:my-8 lg:px-6">
+          <VendorBreakdown />
         </div>
       </SidebarInset>
     </SidebarProvider>

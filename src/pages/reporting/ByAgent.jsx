@@ -485,9 +485,11 @@ function AgentBreakdown() {
                                         <SelectItem key='All' value='All'>
                                             All
                                         </SelectItem>
-                                        {configData?.agentData?.map((agent) => (
+                                     {configData?.agentData
+                                        ?.sort((a, b) => a.fname.localeCompare(b.fname))
+                                        .map((agent) => (
                                             <SelectItem key={agent.agentid} value={agent.agentid}>
-                                                {agent?.fname} {agent?.lname}, {agent?.npn}
+                                            {agent?.fname} {agent?.lname}, {agent?.npn}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

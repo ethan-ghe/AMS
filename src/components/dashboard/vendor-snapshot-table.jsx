@@ -1,410 +1,403 @@
-// src/components/vendor-snapshot-table.jsx
-import React, { useMemo, useState } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react"
+import { useAuth } from "@/contextproviders/AuthContext";
+import { useConfig } from "@/contextproviders/ConfigContext";
+import { DBContext } from "@/contextproviders/DashboardContext"; 
+import useApi from "../../hooks/useApi";
 import {
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, UserCircle, ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "react-router-dom";
-import { DBContext } from "@/contextproviders/DashboardContext";
-import { useConfig } from "../../contextproviders/ConfigContext";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
 
-export function VendorSnapshotTable() {
-  const { rawData } = DBContext();
-  const { configData } = useConfig();
-  const navigate = useNavigate();
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value);
+};
 
-  // ✅ Merge sales and calls data
-  const generatedData = useMemo(() => {
-    if (!rawData?.salesByVendor && !rawData?.callsByVendor) {
-      return [];
+export function VendorBreakdown() {
+    const { loading } = useAuth();
+    const { configData } = useConfig();
+    const { vendorData } = DBContext();
+
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const [filterText, setFilterText] = useState('');
+
+
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) {
+            return <ArrowUpDown className="ml-2 h-4 w-4" />;
+        }
+        return sortConfig.direction === 'asc' 
+            ? <ArrowUp className="ml-2 h-4 w-4" />
+            : <ArrowDown className="ml-2 h-4 w-4" />;
+    };
+
+const processedData = useMemo(() => {
+    // Add safety check for vendorData
+    if (!vendorData || !Array.isArray(vendorData) || vendorData.length === 0) {
+        return [];
     }
 
-    // Create maps for quick lookup
-    const salesMap = new Map(
-      (rawData.salesByVendor || []).filter(v => v.vendorId !== null).map(s => [s.vendorId, s])
-    );
-    const callsMap = new Map(
-      (rawData.callsByVendor || []).map(c => [c.vendorId, c])
-    );
+    const totalsRow = vendorData.find(row => row.is_total === 1);
+    let filteredVendor = vendorData.filter(row => row.is_total === 0);
 
-    // Get all unique vendor IDs
-    const allVendorIds = new Set([
-      ...salesMap.keys(),
-      ...callsMap.keys()
-    ]);
-
-    return Array.from(allVendorIds).map(vendorId => {
-      const sales = salesMap.get(vendorId);
-      const calls = callsMap.get(vendorId);
-
-      // ✅ Look up vendor friendly name from config
-      const vendorInfo = configData?.vendorData?.find(v => v.vid === vendorId);
-      const vendorName = vendorInfo?.friendly_name || vendorInfo?.friendlyname || vendorId;
-
-      const leadCost = calls?.totalCost || 0;
-      const coreSales = sales?.saleCount || 0;
-      const cpa = coreSales > 0 && leadCost > 0 ? leadCost / coreSales : 0;
-
-      return {
-        vendorid: vendorName,
-        vendorIdRaw: vendorId,
-        coreSales: coreSales,
-        secondarySales: 0,
-        callCount: calls?.callCount || 0,
-        leadCost: leadCost,
-        cpa: cpa
-      };
-    }).sort((a, b) => b.coreSales - a.coreSales); // Sort by sales descending
-  }, [rawData, configData]);
-
-  const [columnFilters, setColumnFilters] = useState([]);
-
-  const columns = useMemo(() => [
-    {
-      accessorKey: "vendorid",
-      header: "Vendor Name",
-      size: 0.2467 * 100,
-      maxSize: 0.2467 * 100,
-      cell: ({ row }) => (
-        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span>{row.getValue("vendorid")}</span>
-        </div>
-      ),
-      enableSorting: true,
-      filterFn: "includesString",
-    },
-    {
-      accessorKey: "callCount",
-      header: "Calls",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => <span>{row.getValue("callCount")}</span>,
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "coreSales",
-      header: "Core Sales",
-      size: 0.21 * 100,
-      maxSize: 0.21 * 100,
-      cell: ({ row }) => <span>{row.getValue("coreSales")}</span>,
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "leadCost",
-      header: "Lead Cost",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => {
-        const cost = row.getValue("leadCost");
-        return <span>${cost ? (cost / 100).toFixed(2) : '0.00'}</span>;
-      },
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      accessorKey: "cpa",
-      header: "CPA",
-      size: 0.15 * 100,
-      maxSize: 0.15 * 100,
-      cell: ({ row }) => {
-        const cpa = row.getValue("cpa");
-        const coreSales = row.getValue("coreSales");
-        
-        if (coreSales === 0) return <span>-</span>;
-        if (cpa === 0) return <span>$0.00</span>;
-        
-        return <span>${(cpa / 100).toFixed(2)}</span>;
-      },
-      enableSorting: true,
-      sortingFn: "basic",
-    },
-    {
-      id: "actions",
-      size: 0.0833 * 100,
-      maxSize: 0.0833 * 100,
-      cell: ({ row }) => {
-        const vendor = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => navigate(`/vendor-profile/${vendor.vendorIdRaw}`)}
-                className="cursor-pointer"
-              >
-                <UserCircle className="mr-2 h-4 w-4" />
-                View vendor profile
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+    if (filterText) {
+        filteredVendor = filteredVendor.filter(row =>
+            row.friendlyname?.toLowerCase().includes(filterText.toLowerCase())
         );
-      },
-      enableSorting: false,
-    },
-  ], [navigate]);
+    }
 
-  const data = generatedData || [];
+    if (sortConfig.key) {
+        filteredVendor = [...filteredVendor].sort((a, b) => {
+            const aVal = a[sortConfig.key];
+            const bVal = b[sortConfig.key];
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    state: {
-      columnFilters,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 5,
-      },
-    },
-  });
+            if (aVal === bVal) return 0;
 
-  return (
-    <TooltipProvider>
-      <div>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+            if (sortConfig.direction === 'asc') {
+                return aVal > bVal ? 1 : -1;
+            } else {
+                return aVal < bVal ? 1 : -1;
+            }
+        });
+    }
+
+    return totalsRow ? [...filteredVendor, totalsRow] : filteredVendor;
+}, [vendorData, sortConfig, filterText]);
+
+    return (
+        <TooltipProvider>
             <div>
-              <CardTitle>Vendor Snapshot</CardTitle>
-              <CardDescription>Overview of vendor sales performance</CardDescription>
-            </div>
-            <div className="flex items-center py-4">
-              <Input
-                placeholder="Search by vendor name..."
-                value={table.getColumn("vendorid")?.getFilterValue() ?? ""}
-                onChange={(event) =>
-                  table.getColumn("vendorid")?.setFilterValue(event.target.value)
-                }
-                className="max-w-sm"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="px-0 m-0">
-            <div
-              style={{
-                width: "95%",
-                margin: "0 auto",
-                overflowX: "auto",
-              }}
-              className="rounded-md border"
-            >
-              <Table style={{ width: "100%", tableLayout: "fixed" }}>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        header.id !== "actions" ? (
-                          <Tooltip key={header.id}>
-                            <TooltipTrigger asChild>
-                              <TableHead
-                                style={{
-                                  width: `${header.column.columnDef.size}%`,
-                                  maxWidth: `${header.column.columnDef.maxSize}%`,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                <div
-                                  className={`flex items-center ${
-                                    header.column.getCanSort() ? "cursor-pointer select-none" : ""
-                                  }`}
-                                  onClick={header.column.getToggleSortingHandler()}
-                                >
-                                  {flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
-                                  {header.column.getCanSort() && (
-                                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                                  )}
-                                  {{
-                                    asc: " 🔼",
-                                    desc: " 🔽",
-                                  }[header.column.getIsSorted()] ?? null}
-                                </div>
-                              </TableHead>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" align="center">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <TableHead
-                            key={header.id}
-                            style={{
-                              width: `${header.column.columnDef.size}%`,
-                              maxWidth: `${header.column.columnDef.maxSize}%`,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <div className="flex items-center">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
+                <Card className="gap-2">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle>Vendor Performance Report</CardTitle>
+                            <CardDescription>Today's vendor performance breakdown</CardDescription>
+                        </div>
+                        <div className="flex items-center py-4">
+                            <div className="relative w-64">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Filter by vendor name..."
+                                    value={filterText}
+                                    onChange={(e) => setFilterText(e.target.value)}
+                                    className="pl-8"
+                                />
                             </div>
-                          </TableHead>
-                        )
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id}>
-                        {row.getVisibleCells().map((cell) => (
-                          cell.column.id !== "actions" ? (
-                            <Tooltip key={cell.id}>
-                              <TooltipTrigger asChild>
-                                <TableCell
-                                  style={{
-                                    width: `${cell.column.columnDef.size}%`,
-                                    maxWidth: `${cell.column.columnDef.maxSize}%`,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </TableCell>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="center">
-                                <span>{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>
-                              </TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <TableCell
-                              key={cell.id}
-                              style={{
-                                width: `${cell.column.columnDef.size}%`,
-                                maxWidth: `${cell.column.columnDef.maxSize}%`,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
-                          )
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        No results.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="px-0 m-0">
+                        <div
+                            style={{
+                                width: "98%",
+                                margin: "0 auto",
+                                overflowX: "auto",
+                            }}
+                            className="rounded-md border"
+                        >
+                            <Table style={{ width: "100%", tableLayout: "auto" }}>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="sticky left-0 bg-background z-10" rowSpan={2}>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => handleSort('friendlyname')}
+                                                className="h-auto p-0 font-semibold hover:bg-transparent"
+                                            >
+                                                Vendor
+                                                {getSortIcon('friendlyname')}
+                                            </Button>
+                                        </TableHead>
+                                        <TableHead className="text-center bg-muted/30" colSpan={5}>Calls</TableHead>
+                                        <TableHead className="text-center bg-blue-50/50" colSpan={4}>Leads</TableHead>
+                                        <TableHead className="text-center bg-green-50/50" colSpan={4}>Drops</TableHead>
+                                        <TableHead className="text-center" rowSpan={2}>
+                                            <Button variant="ghost" onClick={() => handleSort('total_sale_count')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                Total Sales{getSortIcon('total_sale_count')}
+                                            </Button>
+                                        </TableHead>
+                                    </TableRow>
+                                    <TableRow>
+                                        {/* Calls columns */}
+                                        <TableHead className="text-right bg-muted/30">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('total_calls')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Total{getSortIcon('total_calls')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Total Calls</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-muted/30">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('billable_calls')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Billable{getSortIcon('billable_calls')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Billable Calls</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-muted/30">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('call_cost')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Cost{getSortIcon('call_cost')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Call Cost</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-muted/30">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('call_sale_count')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Sales{getSortIcon('call_sale_count')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Call Sales</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-muted/30">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('call_sale_cpa')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        CPA{getSortIcon('call_sale_cpa')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Call CPA</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        {/* Leads columns */}
+                                        <TableHead className="text-right bg-blue-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('total_leads')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Total{getSortIcon('total_leads')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Total Leads</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-blue-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('lead_cost')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Cost{getSortIcon('lead_cost')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Lead Cost</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-blue-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('lead_sale_count')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Sales{getSortIcon('lead_sale_count')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Lead Sales</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-blue-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('lead_sale_cpa')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        CPA{getSortIcon('lead_sale_cpa')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Lead CPA</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        {/* Drops columns */}
+                                        <TableHead className="text-right bg-green-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('total_drops')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Total{getSortIcon('total_drops')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Total Drops</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-green-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('drop_cost')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Cost{getSortIcon('drop_cost')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Drop Cost</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-green-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('drop_sale_count')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        Sales{getSortIcon('drop_sale_count')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Drop Sales</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                        <TableHead className="text-right bg-green-50/50">
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" onClick={() => handleSort('drop_sale_cpa')} className="h-auto p-0 font-semibold hover:bg-transparent">
+                                                        CPA{getSortIcon('drop_sale_cpa')}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Drop CPA</TooltipContent>
+                                            </Tooltip>
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {processedData.length > 0 ? (
+                                        processedData.map((row, index) => (
+                                            <TableRow 
+                                                key={index}
+                                                className={row.is_total === 1 ? "font-bold bg-muted/50" : ""}
+                                            >
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="sticky left-0 bg-background">{row.friendlyname}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.friendlyname}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-muted/10">{row.total_calls}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.total_calls}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-muted/10">{row.billable_calls}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.billable_calls}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-muted/10">{formatCurrency(row.call_cost)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.call_cost)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-muted/10">{row.call_sale_count}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.call_sale_count}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-muted/10">{formatCurrency(row.call_sale_cpa)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.call_sale_cpa)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-blue-50/30">{row.total_leads}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.total_leads}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-blue-50/30">{formatCurrency(row.lead_cost)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.lead_cost)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-blue-50/30">{row.lead_sale_count}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.lead_sale_count}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-blue-50/30">{formatCurrency(row.lead_sale_cpa)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.lead_sale_cpa)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-green-50/30">{row.total_drops}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.total_drops}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-green-50/30">{formatCurrency(row.drop_cost)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.drop_cost)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-green-50/30">{row.drop_sale_count}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.drop_sale_count}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right bg-green-50/30">{formatCurrency(row.drop_sale_cpa)}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{formatCurrency(row.drop_sale_cpa)}</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <TableCell className="text-right font-semibold">{row.total_sale_count}</TableCell>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>{row.total_sale_count}</TooltipContent>
+                                                </Tooltip>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={15} className="text-center text-muted-foreground">
+                                                {filterText ? `No vendors found matching "${filterText}"` : 'No data available'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
-            <div className="flex items-center justify-between mt-4 px-2 lg:px-4">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {table.getState().pagination.pageIndex + 1} of{" "}
-                  {table.getPageCount()}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Rows per page:</span>
-                <Select
-                  value={table.getState().pagination.pageSize.toString()}
-                  onValueChange={(value) => {
-                    table.setPageSize(Number(value));
-                  }}
-                >
-                  <SelectTrigger className="w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[5, 10, 20, 30].map((pageSize) => (
-                      <SelectItem key={pageSize} value={pageSize.toString()}>
-                        {pageSize}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </TooltipProvider>
-  );
+        </TooltipProvider>
+    );
 }
