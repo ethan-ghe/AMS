@@ -42,7 +42,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { ChevronDownIcon, FileText, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react"
+import { ChevronDownIcon, FileText, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Search, Download } from "lucide-react"
 
 
 const PRESETS = [
@@ -267,6 +267,88 @@ function StateBreakdown() {
         return totalsRow ? [...stateData, totalsRow] : stateData;
     }, [reportData, sortConfig, filterText]);
 
+    const exportToCSV = useCallback(() => {
+        if (!processedData || processedData.length === 0) return;
+
+        // Separate totals row from state data
+        const totalsRow = processedData.find(row => row.is_total === 1);
+        const stateData = processedData.filter(row => row.is_total === 0);
+
+        // CSV Headers
+        const headers = [
+            'State Name',
+            'Live Calls',
+            'Completed',
+            'Billable',
+            'Avg Duration',
+            'Billable %',
+            'Call Cost',
+            'Sales',
+            'CPA',
+            'Conversion %'
+        ];
+
+        const rows = [headers];
+
+        // Add state data
+        stateData.forEach(state => {
+            rows.push([
+                state.state_name,
+                state.live_calls,
+                state.completed_calls,
+                state.billable_calls,
+                formatDuration(state.average_billable_duration),
+                state.billable_percentage,
+                state.call_cost,
+                state.call_sale_count,
+                state.call_sale_cpa,
+                state.call_conversion_rate_percentage
+            ]);
+        });
+
+        // Add totals row
+        if (totalsRow) {
+            rows.push([]); // Empty row separator
+            rows.push([
+                totalsRow.state_name,
+                totalsRow.live_calls,
+                totalsRow.completed_calls,
+                totalsRow.billable_calls,
+                formatDuration(totalsRow.average_billable_duration),
+                totalsRow.billable_percentage,
+                totalsRow.call_cost,
+                totalsRow.call_sale_count,
+                totalsRow.call_sale_cpa,
+                totalsRow.call_conversion_rate_percentage
+            ]);
+        }
+
+        // Convert to CSV string
+        const csvContent = rows.map(row =>
+            row.map(cell => {
+                const cellStr = String(cell);
+                if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                    return `"${cellStr.replace(/"/g, '""')}"`;
+                }
+                return cellStr;
+            }).join(',')
+        ).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `state_performance_${startDate?.toISOString().split('T')[0]}_to_${endDate?.toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success('Report exported to CSV');
+    }, [processedData, startDate, endDate]);
+
     return (
         <SidebarProvider>
             <AppSidebar />
@@ -302,7 +384,7 @@ function StateBreakdown() {
                                     {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
                                 <div className="relative w-64">
                                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -312,6 +394,9 @@ function StateBreakdown() {
                                         className="pl-8"
                                     />
                                 </div>
+                                <Button variant="outline" size="icon" onClick={exportToCSV}>
+                                    <Download className="h-4 w-4" />
+                                </Button>
                                 <Button variant="outline" onClick={resetReport}>
                                     <ArrowLeft className="mr-2 h-4 w-4" />
                                     New Report

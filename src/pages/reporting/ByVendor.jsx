@@ -42,7 +42,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { ChevronDownIcon, FileText, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react"
+import { ChevronDownIcon, FileText, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Search, Download } from "lucide-react"
 
 
 const PRESETS = [
@@ -159,7 +159,7 @@ function VendorBreakdown() {
     const [startOpen, setStartOpen] = useState(false);
     const [endOpen, setEndOpen] = useState(false);
     const [reportData, setReportData] = useState(null)
-    
+
     // Sorting and filtering state
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
     const [filterText, setFilterText] = useState('');
@@ -220,7 +220,7 @@ function VendorBreakdown() {
         if (sortConfig.key !== columnKey) {
             return <ArrowUpDown className="ml-2 h-4 w-4" />;
         }
-        return sortConfig.direction === 'asc' 
+        return sortConfig.direction === 'asc'
             ? <ArrowUp className="ml-2 h-4 w-4" />
             : <ArrowDown className="ml-2 h-4 w-4" />;
     };
@@ -260,6 +260,133 @@ function VendorBreakdown() {
         return totalsRow ? [...vendorData, totalsRow] : vendorData;
     }, [reportData, sortConfig, filterText]);
 
+    const exportToCSV = useCallback(() => {
+        if (!processedData || processedData.length === 0) return;
+
+        // Separate totals row from vendor data
+        const totalsRow = processedData.find(row => row.is_total === 1);
+        const vendorData = processedData.filter(row => row.is_total === 0);
+
+        // CSV Headers
+        const headers = [
+            'Vendor',
+            // Calls section
+            'Total Calls',
+            'Billable Calls',
+            'Billable %',
+            'Call Cost',
+            'Call Sales',
+            'Call CPA',
+            'Call Conversion %',
+            // Leads section
+            'Total Leads',
+            'Billable Leads',
+            'Billable Lead %',
+            'Lead Cost',
+            'Lead Sales',
+            'Lead CPA',
+            // Drops section
+            'Total Drops',
+            'Billable Drops',
+            'Billable Drop %',
+            'Drop Cost',
+            'Drop Sales',
+            'Drop CPA',
+            // Total
+            'Total Sales'
+        ];
+
+        const rows = [headers];
+
+        // Add vendor data
+        vendorData.forEach(vendor => {
+            rows.push([
+                vendor.friendlyname,
+                // Calls
+                vendor.total_calls,
+                vendor.billable_calls,
+                vendor.billable_percentage,
+                vendor.call_cost,
+                vendor.call_sale_count,
+                vendor.call_sale_cpa,
+                vendor.call_conversion_rate_percentage,
+                // Leads
+                vendor.total_leads,
+                vendor.billable_leads,
+                vendor.billable_lead_percentage,
+                vendor.lead_cost,
+                vendor.lead_sale_count,
+                vendor.lead_sale_cpa,
+                // Drops
+                vendor.total_drops,
+                vendor.billable_drops,
+                vendor.billable_drop_percentage,
+                vendor.drop_cost,
+                vendor.drop_sale_count,
+                vendor.drop_sale_cpa,
+                // Total
+                vendor.total_sale_count
+            ]);
+        });
+
+        // Add totals row
+        if (totalsRow) {
+            rows.push([]); // Empty row separator
+            rows.push([
+                totalsRow.friendlyname,
+                // Calls
+                totalsRow.total_calls,
+                totalsRow.billable_calls,
+                totalsRow.billable_percentage,
+                totalsRow.call_cost,
+                totalsRow.call_sale_count,
+                totalsRow.call_sale_cpa,
+                totalsRow.call_conversion_rate_percentage,
+                // Leads
+                totalsRow.total_leads,
+                totalsRow.billable_leads,
+                totalsRow.billable_lead_percentage,
+                totalsRow.lead_cost,
+                totalsRow.lead_sale_count,
+                totalsRow.lead_sale_cpa,
+                // Drops
+                totalsRow.total_drops,
+                totalsRow.billable_drops,
+                totalsRow.billable_drop_percentage,
+                totalsRow.drop_cost,
+                totalsRow.drop_sale_count,
+                totalsRow.drop_sale_cpa,
+                // Total
+                totalsRow.total_sale_count
+            ]);
+        }
+
+        // Convert to CSV string
+        const csvContent = rows.map(row =>
+            row.map(cell => {
+                const cellStr = String(cell);
+                if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                    return `"${cellStr.replace(/"/g, '""')}"`;
+                }
+                return cellStr;
+            }).join(',')
+        ).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `vendor_performance_${startDate?.toISOString().split('T')[0]}_to_${endDate?.toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success('Report exported to CSV');
+    }, [processedData, startDate, endDate]);
+
     return (
         <SidebarProvider>
             <AppSidebar />
@@ -295,7 +422,7 @@ function VendorBreakdown() {
                                     {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
                                 <div className="relative w-64">
                                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -305,6 +432,9 @@ function VendorBreakdown() {
                                         className="pl-8"
                                     />
                                 </div>
+                                <Button variant="outline" size="icon" onClick={exportToCSV}>
+                                    <Download className="h-4 w-4" />
+                                </Button>
                                 <Button variant="outline" onClick={resetReport}>
                                     <ArrowLeft className="mr-2 h-4 w-4" />
                                     New Report
@@ -417,7 +547,7 @@ function VendorBreakdown() {
                                 <TableBody>
                                     {processedData.length > 0 ? (
                                         processedData.map((row, index) => (
-                                            <TableRow 
+                                            <TableRow
                                                 key={index}
                                                 className={row.is_total === 1 ? "font-bold bg-muted/50" : ""}
                                             >
@@ -477,12 +607,12 @@ function VendorBreakdown() {
                                             All
                                         </SelectItem>
                                         {configData?.vendorData
-                                        ?.sort((a, b) => a.friendlyname.localeCompare(b.friendlyname))
-                                        .map((vendor) => (
-                                            <SelectItem key={vendor.vid} value={vendor.vid}>
-                                            {vendor?.friendlyname}
-                                            </SelectItem>
-                                        ))}
+                                            ?.sort((a, b) => a.friendlyname.localeCompare(b.friendlyname))
+                                            .map((vendor) => (
+                                                <SelectItem key={vendor.vid} value={vendor.vid}>
+                                                    {vendor?.friendlyname}
+                                                </SelectItem>
+                                            ))}
                                     </SelectContent>
                                 </Select>
                             </div>
