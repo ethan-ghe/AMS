@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import AgentBreakdown from "./pages/reporting/ByAgent";
 import StateBreakdown from "./pages/reporting/ByState";
+import ListMaker from "./pages/utility/ListMaker";
 import { Toaster } from "@/components/ui/sonner";
 import VendorBreakdown from "./pages/reporting/ByVendor";
 
@@ -59,6 +60,7 @@ function App() {
               <Route path="/reporting/agent" element={<AgentBreakdown />} />
               <Route path="/reporting/state" element={<StateBreakdown />} />
               <Route path="/reporting/vendor" element={<VendorBreakdown />} />
+              <Route path="/utility/listmaker" element={<ListMaker />} />
             </Route>
           </Route>
           
